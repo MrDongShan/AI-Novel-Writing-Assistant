@@ -10,7 +10,7 @@ import {
 } from "./ideaContext";
 import { marketRadarService } from "../../../../modules/marketRadar/application/MarketRadarService";
 
-const IDEA_INSPIRATION_MAX_TOKENS = 1_800;
+const IDEA_INSPIRATION_MAX_TOKENS = 131_072;
 const IDEA_INSPIRATION_RETRY_TEMPERATURE = 0.25;
 
 function resolveIdeaInspirationTemperature(input: DirectorIdeaInspirationRequest): number {

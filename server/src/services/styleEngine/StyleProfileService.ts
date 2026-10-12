@@ -88,9 +88,9 @@ interface GeneratedStylePayload extends GeneratedStyleCorePayload {
 }
 
 const AI_STYLE_BRIEF_SOURCE_PREFIX = "ai-style-brief:";
-const STYLE_EXTRACTION_MAX_TOKENS = 4096;
-const STYLE_METADATA_MAX_TOKENS = 600;
-const STYLE_ANTI_AI_SELECTION_MAX_TOKENS = 500;
+const STYLE_EXTRACTION_MAX_TOKENS = 131_072;
+const STYLE_METADATA_MAX_TOKENS = 131_072;
+const STYLE_ANTI_AI_SELECTION_MAX_TOKENS = 131_072;
 const DEFAULT_EXTRACTION_PRESET_KEY: StyleExtractionPreset["key"] = "balanced";
 type TextExtractionSourceType = Extract<StyleSourceType, "from_text" | "from_knowledge_document">;
 

@@ -16,7 +16,7 @@ import {
 } from "./worldStructure";
 
 const WORLD_SKELETON_GENERATION_TIMEOUT_MS = 120_000;
-const WORLD_SKELETON_GENERATION_MAX_TOKENS = 6_000;
+const WORLD_SKELETON_GENERATION_MAX_TOKENS = 131_072;
 
 export interface WorldSkeletonGenerateInput {
   idea: string;

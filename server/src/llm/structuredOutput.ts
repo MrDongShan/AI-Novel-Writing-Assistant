@@ -287,7 +287,7 @@ export function resolveStructuredOutputProfile(input: {
     return buildProfile({
       family: qwenFamily ? "custom_openai_compatible_qwen" : "custom_openai_compatible",
       preferredStructuredStrategy: "prompt_json",
-      safeStructuredMaxTokens: 8192,
+      safeStructuredMaxTokens: 131072,
     });
   }
   return buildProfile({

@@ -1,18 +1,55 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { CircleHelp } from "lucide-react";
 import type { BasicInfoOption } from "../../novelBasicInfo.shared";
 import { cn } from "@/lib/utils";
 
 export function HelpHint({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLSpanElement | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
   return (
-    <button
-      type="button"
-      className="inline-flex h-4 w-4 items-center justify-center text-muted-foreground/70 transition hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-      title={text}
-      aria-label={text}
-    >
-      <CircleHelp className="h-3.5 w-3.5" />
-    </button>
+    <span ref={containerRef} className="relative inline-flex items-center">
+      <button
+        type="button"
+        className="inline-flex h-4 w-4 items-center justify-center text-muted-foreground/70 transition hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+        title={text}
+        aria-label={text}
+        aria-expanded={open}
+        onClick={() => setOpen((previous) => !previous)}
+      >
+        <CircleHelp className="h-3.5 w-3.5" />
+      </button>
+      {open ? (
+        <span
+          role="tooltip"
+          className="absolute left-0 top-[calc(100%+6px)] z-50 w-72 max-w-[70vw] rounded-2xl border border-border/60 bg-popover p-3 text-left text-xs font-normal leading-5 text-popover-foreground shadow-lg"
+        >
+          {text}
+        </span>
+      ) : null}
+    </span>
   );
 }
 

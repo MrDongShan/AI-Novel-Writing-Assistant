@@ -15,8 +15,8 @@ import {
 } from "./ideaContext";
 import { marketRadarService } from "../../../../modules/marketRadar/application/MarketRadarService";
 
-const CONSTELLATION_OPTIONS_MAX_TOKENS = 5_000;
-const CONSTELLATION_COMPOSE_MAX_TOKENS = 800;
+const CONSTELLATION_OPTIONS_MAX_TOKENS = 131_072;
+const CONSTELLATION_COMPOSE_MAX_TOKENS = 131_072;
 const CONSTELLATION_RETRY_TEMPERATURE = 0.25;
 
 function optionsTemperature(input: DirectorIdeaConstellationOptionsRequest): number {
