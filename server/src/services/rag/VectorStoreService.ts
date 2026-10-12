@@ -66,9 +66,16 @@ function estimateJsonBytes(value: unknown): number {
 
 export class VectorStoreService {
   private ensuredDimension = 0;
+  private ensuredAt = 0;
   private readonly upsertWrapperBytes = estimateJsonBytes({ points: [] });
   private static readonly timeoutPattern = /Qdrant 请求超时/;
   private static readonly logPrefix = "[RAG][Qdrant]";
+  /**
+   * 集合校验结果的缓存有效期。集合可能在外部被删除（例如重建向量库、切换 Qdrant 实例），
+   * 缓存若不设上限就会一直跳过校验，后续写入直接 404 且无法自愈。
+   */
+  private static readonly collectionCheckTtlMs = 60_000;
+  private static readonly collectionMissingPattern = /doesn't exist|Not found:\s*Collection/i;
 
   private logInfo(message: string, meta?: Record<string, unknown>): void {
     if (!ragConfig.verboseLog) {
@@ -120,6 +127,12 @@ export class VectorStoreService {
     });
     if (!response.ok) {
       const text = await response.text();
+      // 集合被外部删除时（例如重建向量库），立即失效校验缓存，
+      // 让下一次 ensureCollection 重新检查并按需重建，而不是持续 404。
+      if (VectorStoreService.collectionMissingPattern.test(text)) {
+        this.ensuredDimension = 0;
+        this.ensuredAt = 0;
+      }
       throw new Error(`Qdrant 请求失败(${response.status})：${text}`);
     }
     return await response.json() as T;
@@ -237,7 +250,10 @@ export class VectorStoreService {
     if (dimension <= 0) {
       throw new Error("向量维度无效。");
     }
-    if (this.ensuredDimension === dimension) {
+    if (
+      this.ensuredDimension === dimension
+      && Date.now() - this.ensuredAt < VectorStoreService.collectionCheckTtlMs
+    ) {
       return;
     }
 
@@ -258,6 +274,7 @@ export class VectorStoreService {
       });
       await this.ensurePayloadIndexes();
       this.ensuredDimension = dimension;
+      this.ensuredAt = Date.now();
       return;
     }
     if (!getResponse.ok) {
@@ -285,6 +302,7 @@ export class VectorStoreService {
     // 已有集合也确保 payload index 存在（幂等操作）
     await this.ensurePayloadIndexes();
     this.ensuredDimension = dimension;
+    this.ensuredAt = Date.now();
   }
 
   async upsertPoints(points: QdrantPoint[]): Promise<void> {
