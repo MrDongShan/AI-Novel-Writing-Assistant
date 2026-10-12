@@ -14,7 +14,6 @@ import {
   upsertModelRouteConfig,
 } from "./modelRouter";
 import { invokeStructuredLlmDetailed, summarizeStructuredOutputFailure } from "./structuredInvoke";
-import { toText } from "../services/novel/novelP0Utils";
 import {
   resolveStructuredOutputProfile,
   selectStructuredOutputStrategy,
@@ -26,37 +25,6 @@ export type ConnectivityProbeMode = "plain" | "structured" | "both";
 const STRUCTURED_PROBE_SCHEMA = z.object({
   status: z.literal("ok"),
 });
-
-/**
- * 连接探针的输出预算。
- * 不能设得太小：推理型模型会把输出预算全部用于思考（实测 LongCat-2.0 回答「请只回复 ok」
- * 就要 15-18 个思考 token），预算耗尽时 finish_reason 为 length 且 content 缺失，
- * 探针会误判为连接失败。512 相对实测值留出足够余量，成本可以忽略。
- */
-const PLAIN_PROBE_MAX_TOKENS = 512;
-
-function extractReasoningTokenCount(reply: unknown): number | null {
-  const usage = (reply as { usage_metadata?: { output_token_details?: { reasoning?: unknown } } })
-    ?.usage_metadata;
-  const reasoning = usage?.output_token_details?.reasoning;
-  return typeof reasoning === "number" && Number.isFinite(reasoning) ? reasoning : null;
-}
-
-function buildEmptyProbeReplyMessage(input: {
-  model: string;
-  maxTokens: number;
-  reasoningTokens: number | null;
-}): string {
-  const reasoningHint = input.reasoningTokens != null
-    ? `模型在本次调用中已用 ${input.reasoningTokens} 个 token 进行思考。`
-    : "该模型可能在输出预算内全部用于思考。";
-  return [
-    `模型 ${input.model} 返回了空内容，连接测试未能取得可用回复。`,
-    `${reasoningHint}（本次输出预算 ${input.maxTokens}）`,
-    "常见原因：该模型默认开启思考且思考占用输出预算，或该服务商端点未返回标准 message.content。",
-    "建议：在模型路由中改用非思考模型，或确认该服务商已开放此模型的对话端点。",
-  ].join("");
-}
 
 export interface ConnectivityProbeStatus {
   ok: boolean;
@@ -147,7 +115,7 @@ async function testPlainConnection(input: {
       authMode: input.authMode,
       model: input.model,
       temperature: 0.1,
-      maxTokens: PLAIN_PROBE_MAX_TOKENS,
+      maxTokens: 16,
       requestProtocol: input.requestProtocol,
     });
     const llm = await getLLM(input.provider, {
@@ -156,19 +124,11 @@ async function testPlainConnection(input: {
       authMode: input.authMode,
       model: resolved.model,
       temperature: 0.1,
-      maxTokens: PLAIN_PROBE_MAX_TOKENS,
+      maxTokens: 16,
       requestProtocol: resolved.requestProtocol,
     });
     const start = Date.now();
-    const reply = await llm.invoke([new HumanMessage("请只回复 ok")]);
-    const text = toText(reply.content).trim();
-    if (!text) {
-      throw new Error(buildEmptyProbeReplyMessage({
-        model: resolved.model,
-        maxTokens: PLAIN_PROBE_MAX_TOKENS,
-        reasoningTokens: extractReasoningTokenCount(reply),
-      }));
-    }
+    await llm.invoke([new HumanMessage("请只回复 ok")]);
     const plain = {
       ok: true,
       latency: Date.now() - start,
