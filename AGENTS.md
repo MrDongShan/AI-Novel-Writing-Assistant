@@ -20,6 +20,29 @@
   - deterministic post-processing of already-structured AI output.
 - When adding a new capability, first extend the AI schema / structured output / tool contract. Do not patch behavior by stacking special-case string rules.
 
+## Investigation Discipline (Highest Priority)
+
+- When any problem, symptom, or new idea appears, search existing solutions before changing anything. Do not try things blindly and do not guess.
+- Search in this order, and do not skip steps:
+  1. the repository itself (docs, wiki, existing scripts, recent commits);
+  2. then the community — upstream GitHub issues in the dependency's own repository, official documentation, and practical field reports.
+- Prefer the upstream issue tracker of the exact component in use. For this project that includes `michaelfeil/infinity` for the embedding server and `qdrant/qdrant` for the vector store.
+- Every conclusion must name where it came from. A statement that cannot cite a source must be explicitly marked as having no evidence, and must not be used as a conclusion.
+- When community sources conflict, record the disagreement instead of forcing a single answer.
+- Two independent confirmations are required before promoting an observation into a rule. A single sample is not enough.
+- Record what was adopted, what was rejected, and why.
+
+## Dependency and Model Download Rules (Highest Priority)
+
+- For downloading HuggingFace models, use these two options in priority order, and prefer them whenever a model download question comes up:
+  - **Option 1 — ModelScope (`modelscope.cn`)**: look for the target model here first. If a synced version exists, download from ModelScope. Domestic speed is stable and the operation is simple. Limitation: niche and newly released models may lag in synchronization.
+  - **Option 2 — `hf-mirror.com`**: use this when ModelScope does not have the model or the version does not match requirements.
+    - Web: replace the `huggingface.co` domain with `hf-mirror.com`.
+    - Loading models in code: set the environment variable `HF_ENDPOINT=https://hf-mirror.com`.
+    - Command-line batch or multi-threaded downloads: use the companion open-source script [hfd.sh](https://hf-mirror.com/hfd/hfd.sh), which is built on aria2 and supports resume and multi-threaded high-speed pulls.
+- Important: download only the files required for inference. Do not download the entire repository.
+- This option set only supports public models on HuggingFace. Models that are gated and require authorization cannot be used this way.
+
 ## Auto-Director Quality Gate Rules (Highest Priority)
 
 - Chapter audit, acceptance, and quality-loop results must not automatically block the global auto-director or full-book execution chain.
