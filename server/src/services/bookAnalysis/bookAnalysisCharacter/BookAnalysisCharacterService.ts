@@ -58,6 +58,38 @@ export class BookAnalysisCharacterService {
     private readonly promptRunner: CharacterPromptRunner = runStructuredPrompt,
   ) {}
 
+  /**
+   * 恢复被中断的角色档案生成。
+   *
+   * runProfileGeneration 只在 catch 分支把状态改成 failed；如果进程在生成过程中退出
+   * （重启、崩溃、热重载），catch 不会执行，角色就会永久停在 generating，
+   * 界面上表现为按钮一直禁用、显示“生成中”，用户无法重试。
+   *
+   * 因此启动时把残留的 generating 统一改回 failed，给出可读原因，让用户能重试。
+   * 前提：本进程单实例，启动即代表此前没有仍在进行的生成。
+   */
+  async recoverInterruptedGenerations(): Promise<number> {
+    const stale = await prisma.bookAnalysisCharacter.findMany({
+      where: { status: "generating" },
+      select: { id: true, name: true, analysisId: true },
+    });
+    if (stale.length === 0) {
+      return 0;
+    }
+    await prisma.bookAnalysisCharacter.updateMany({
+      where: { id: { in: stale.map((item) => item.id) } },
+      data: {
+        status: "failed",
+        lastGenerationError: "生成过程中服务重启导致任务中断，请重试。",
+      },
+    });
+    console.warn(
+      `[book-analysis] recovered ${stale.length} interrupted character generation(s):`,
+      stale.map((item) => `${item.name}(${item.analysisId})`).join(", "),
+    );
+    return stale.length;
+  }
+
   async listCharacters(analysisId: string): Promise<BookAnalysisCharacter[]> {
     await this.assertAnalysisExists(analysisId);
     const rows = await prisma.bookAnalysisCharacter.findMany({

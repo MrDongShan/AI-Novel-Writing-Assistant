@@ -51,6 +51,7 @@ import worldRouter from "./modules/setup/world/http";
 import writingFormulaRouter from "./routes/writingFormula";
 import { novelEventBus, registerNovelEventHandlers } from "./events";
 import { bookAnalysisService } from "./services/bookAnalysis/BookAnalysisService";
+import { bookAnalysisCharacterService } from "./services/bookAnalysis/bookAnalysisCharacter/BookAnalysisCharacterService";
 import { ragServices } from "./services/rag";
 import { getSharedNovelServices } from "./services/novel/application/sharedNovelServices";
 import { novelSideEffectWorker } from "./events/sideEffects";
@@ -336,6 +337,9 @@ function initializeBackgroundServices(): BackgroundServicesHandle {
   }
   void shortStoryProductionService.recoverPending().catch((error) => {
     console.warn("[short-story] failed to resume pending production.", error);
+  });
+  void bookAnalysisCharacterService.recoverInterruptedGenerations().catch((error) => {
+    console.warn("[book-analysis] failed to recover interrupted character generations.", error);
   });
 
   void loadProviderApiKeys().catch((error) => {
