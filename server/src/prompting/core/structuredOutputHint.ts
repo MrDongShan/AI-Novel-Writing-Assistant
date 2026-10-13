@@ -382,7 +382,85 @@ function resolveStructuredOutputNote<I, O, R>(
   return customNote ?? "";
 }
 
-function buildStructuredOutputHintText(example: unknown, customNote: string, compact: boolean): string {
+/**
+ * 收集 schema 中的枚举约束，供提示词显式列出候选值。
+ * 示例 JSON 只能展示每个枚举的第一个取值，模型据此不知道其余合法值，
+ * 容易自造近义值（例如把 sourceType 写成 "原文"），因此必须单独列出。
+ */
+function collectEnumConstraints(
+  schema: AnySchema,
+  path: Array<string | number> = [],
+  depth = 0,
+  seen = new Set<AnySchema>(),
+  out: Map<string, string[]> = new Map(),
+): Map<string, string[]> {
+  const current = unwrapSchema(schema);
+  if (depth >= DEFAULT_MAX_DEPTH || seen.has(current)) {
+    return out;
+  }
+  seen.add(current);
+
+  if (current instanceof z.ZodEnum) {
+    const options = (current as AnySchema & { options?: string[] }).options ?? [];
+    if (options.length > 0) {
+      out.set(formatEnumPath(path), options);
+    }
+    return out;
+  }
+  if (current instanceof z.ZodObject) {
+    const shape = (current as z.ZodObject<z.ZodRawShape>).shape ?? {};
+    for (const [name, child] of Object.entries(shape)) {
+      collectEnumConstraints(child as AnySchema, [...path, name], depth + 1, seen, out);
+    }
+    return out;
+  }
+  if (current instanceof z.ZodArray) {
+    collectEnumConstraints((current as z.ZodArray<AnySchema>).element as AnySchema, [...path, "[]"], depth + 1, seen, out);
+    return out;
+  }
+  if (current instanceof z.ZodUnion) {
+    const union = current as unknown as { options?: AnySchema[]; _def?: { options?: AnySchema[] } };
+    const options = union.options ?? union._def?.options ?? [];
+    for (const option of options) {
+      collectEnumConstraints(option, path, depth + 1, seen, out);
+    }
+    return out;
+  }
+  return out;
+}
+
+function formatEnumPath(path: Array<string | number>): string {
+  let text = "";
+  for (const segment of path) {
+    if (segment === "[]") {
+      text += "[]";
+      continue;
+    }
+    text += text ? `.${segment}` : String(segment);
+  }
+  return text || "(root)";
+}
+
+function buildEnumConstraintLines(schema: AnySchema | undefined): string[] {
+  if (!schema) {
+    return [];
+  }
+  let constraints: Map<string, string[]>;
+  try {
+    constraints = collectEnumConstraints(schema as AnySchema);
+  } catch {
+    return [];
+  }
+  if (constraints.size === 0) {
+    return [];
+  }
+  const lines = Array.from(constraints.entries())
+    .slice(0, 20)
+    .map(([path, options]) => `  - ${path} 只能取：${options.join(" / ")}`);
+  return ["- 枚举字段的取值范围（只能原样选一个，不得自造或翻译）：", ...lines];
+}
+
+function buildStructuredOutputHintText(example: unknown, customNote: string, compact: boolean, schema?: AnySchema): string {
   const noteLine = customNote.trim()
     ? `- ${customNote.trim()}`
     : "";
@@ -394,7 +472,8 @@ function buildStructuredOutputHintText(example: unknown, customNote: string, com
     "- 如果任务正文里对数组数量、枚举取值、空数组、必填字段有更具体要求，以任务正文为准。",
     "- 输出必须是能被 JSON.parse 直接解析的严格 JSON：字符串值内部不得出现未转义的英文双引号，需要引用词语时改用中文引号「」或『』；换行、制表符与反斜杠也必须正确转义。",
     "- 字段类型必须与示例一致：示例中是对象就输出对象，是数组就输出数组，是数字就输出数字。不要用字符串代替对象或数字（例如把 chapterIndex 写成 \"unknown\"），也不要给对象字段写纯文本。",
-    "- 无法确定的字段直接省略，不要用 \"unknown\"、\"未知\"、\"待补充\" 之类的占位字符串顶替。",
+    "- 无法确定的字段直接省略该键，不要写 null，也不要用 \"unknown\"、\"未知\"、\"待补充\" 之类的占位字符串顶替。省略与 null 不等价：可省略的字段出现 null 会导致校验失败。",
+    ...buildEnumConstraintLines(schema),
     noteLine,
     "示例：",
     safeJsonStringify(example, compact),
@@ -421,7 +500,12 @@ export function appendStructuredOutputHintMessages<I, O, R>(input: {
   const example = resolveStructuredOutputExample(input.asset, input.promptInput, input.context);
   const note = resolveStructuredOutputNote(input.asset, input.promptInput, input.context);
 
-  const hint=new HumanMessage(buildStructuredOutputHintText(example,note,input.asset.structuredOutputHint?.compact===true));
+  const hint=new HumanMessage(buildStructuredOutputHintText(
+    example,
+    note,
+    input.asset.structuredOutputHint?.compact===true,
+    input.asset.outputSchema as AnySchema | undefined,
+  ));
   const declared=input.asset.structuredOutputHint;
   return placeStructuredHint(input.messages,hint,!input.preserveMessageLayout && declared?.placement==="stable_prefix"
     && typeof declared.example!=="function" && typeof declared.note!=="function");

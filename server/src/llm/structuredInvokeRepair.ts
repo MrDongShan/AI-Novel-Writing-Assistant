@@ -197,6 +197,8 @@ export async function repairWithLlm<T>(
     "如果校验错误是 expected string, received number/boolean，必须保留原值语义并改成 JSON 字符串，例如 19 改为 \"19\"、true 改为 \"true\"，不要删除字段。",
     "如果校验错误是 expected record/object, received string，必须把该字段改写为 JSON 对象；例如 performance 应写成 {\"detail\": \"...\"}，不能保留纯文本。",
     "如果校验错误是 expected number, received string，必须改写为不带引号的数字；无法确定数值时直接省略该字段，不要写 \"unknown\"、\"未知\" 之类的字符串顶替。",
+    "如果校验错误是 expected ..., received null，说明该字段不允许 null：能确定取值就补上正确取值，确定不了就整键删除（省略），不要把 null 留在对象里。",
+    "枚举字段只能取错误信息或 Schema 里列出的候选值之一，不得自造近义值或翻译成中文。",
     "输出必须是能被 JSON.parse 直接解析的严格 JSON：字符串值内部不得出现未转义的英文双引号，需要引用词语时改用中文引号「」或『』；换行、制表符与反斜杠也必须正确转义。",
     "如果校验错误指出某个数组数量过多或过少，必须把该路径的数组长度修正到错误里要求的精确数量，不能停留在接近正确的数量。",
     "目标 JSON Schema 是最终字段合同；即使原始输出已截断、退化或缺少大量字段，也必须依据 Schema 重建完整对象。",
