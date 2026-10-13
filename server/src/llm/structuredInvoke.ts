@@ -164,10 +164,14 @@ async function resolveAttemptTarget(input: {
   requestProtocol?: ModelRouteRequestProtocol;
   structuredStrategy?: StructuredOutputStrategy;
 }): Promise<StructuredAttemptTarget> {
+  // 即使调用方显式传入了 provider/model，也要解析任务路由：
+  // 路由上的 structuredResponseFormat 是结构化输出的权威配置（例如
+  // 为支持原生 JSON 模式的模型开启 json_object），而很多调用方
+  // （如拆书角色档案）会直接带上 provider/model。
+  // 只有在解析出的 provider/model 与路由一致时才会采用该配置，
+  // 因此显式指定了别的模型时不受影响，见下方 preferredStrategy。
   const shouldResolveRoutePreference = Boolean(
     input.taskType
-      && input.provider == null
-      && input.model == null
       && input.structuredStrategy == null,
   );
   const route = shouldResolveRoutePreference ? await resolveModel(input.taskType!) : null;
