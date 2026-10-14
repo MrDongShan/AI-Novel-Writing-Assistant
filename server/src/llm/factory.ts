@@ -90,6 +90,16 @@ export interface ResolvedLLMClientOptions {
 const providerSecrets = new Map<LLMProvider, ProviderSecret>();
 const RESOLVED_LLM_OPTIONS = Symbol("RESOLVED_LLM_OPTIONS");
 
+/**
+ * 推理模型的输出预算必须同时覆盖“思考 token + 正文 token”，
+ * 而各调用方传入的 maxTokens 只按正文估算（例如章节列表用 900 + 章数×380）。
+ * 思考一旦吃掉大半预算，正文就会被截断甚至完全为空
+ * （实测 LongCat-2.0：maxTokens=2040 时 reasoning=2039、content=0）。
+ * 因此保留原预算作为正文额度，在其之上追加思考余量。
+ * 观测到的单次思考量在 7 ~ 13095 token 之间波动，取 16384 可覆盖。
+ */
+const REASONING_TOKEN_HEADROOM = 16_384;
+
 type ChatOpenAIWithResolvedOptions = ChatOpenAI & {
   [RESOLVED_LLM_OPTIONS]?: ResolvedLLMClientOptions;
 };
@@ -318,12 +328,17 @@ export async function resolveLLMClientOptions(
   let effectiveMaxTokens = resolvedMaxTokens;
   if (structuredProfile && usesNativeStructured && structuredProfile.omitMaxTokensForNativeStructured) {
     effectiveMaxTokens = undefined;
-  } else if (
-    structuredProfile
-    && typeof structuredProfile.safeStructuredMaxTokens === "number"
-    && typeof effectiveMaxTokens === "number"
-  ) {
-    effectiveMaxTokens = Math.min(effectiveMaxTokens, structuredProfile.safeStructuredMaxTokens);
+  } else if (typeof effectiveMaxTokens === "number") {
+    // 开启思考时先为思考追加余量，再套用结构化安全上限。
+    // 只在结构化请求上追加：结构化路径会连续解析两轮
+    // （先取 target、再建客户端），若不加限定余量会被叠加两次。
+    // 纯文本输出即便被截断仍可用，不会出现“内容为空”的硬失败。
+    if (reasoningEnabled && structuredProfile) {
+      effectiveMaxTokens += REASONING_TOKEN_HEADROOM;
+    }
+    if (structuredProfile && typeof structuredProfile.safeStructuredMaxTokens === "number") {
+      effectiveMaxTokens = Math.min(effectiveMaxTokens, structuredProfile.safeStructuredMaxTokens);
+    }
   }
   const usesEnableThinkingFlag = Boolean(
     shouldForceDisableReasoning
